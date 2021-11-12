@@ -35,23 +35,43 @@ app.post('/auth',async (req,res) => {
         const client = await pool.connect();
         
         try{
-            let r = await client.query('SELECT * FROM users where user = $1',[req.body.user]);
-            if(r.rows.length) return res.json({status: 0,msg: 'user already exists'});
+            let r = await client.query('SELECT * FROM users where username = $1',[req.body.user]);
+            if(r.rows.length) return res.json({status: 0,msg: `user ${req.body.user} already exists`});
             
             const hash = await bcrypt.hash(req.body.pass,10);
 
-            r = await client.query('INSERT into users("user","passwd") VALUES($1,$2)',[req.body.user,hash]);
-            let a = 1;
-            
+            await client.query('INSERT into users("username","passwd") VALUES($1,$2)',[req.body.user,hash]);
             client.release();
-            return {status: 1, msg: 'user added'};
+            
+            return res.json({status: 1, msg: `user ${req.body.user} added`});
         }
         catch(e){
             return res.json({status: 0,msg: 'error while signing up - ' + e});
         }
-        
+    }
+
+    if(req.body.scope == 'login'){
+        const client = await pool.connect();
+
+        try{
+            let r = await client.query('SELECT passwd FROM users where username = $1',[req.body.user]);
+            client.release();
+
+            if(r.rows.length == 0) return res.json({status: 0,msg: `user ${req.body.user} does not exist`});
+            
+            let hash = r.rows[0].passwd;
+            
+            let match = await bcrypt.compare(req.body.pass,hash);
+            if(match){
+                return res.json({status: 1, msg: 'logged in! :D'});
+            }
+            else return res.json({status: 0, msg: 'wrong password D:'});
 
 
+        }
+        catch(e){
+            return res.json({status: 0,msg: 'error while signing up - ' + e});
+        }
     }
 });
 
