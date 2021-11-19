@@ -1,6 +1,5 @@
 import express from "express";
 import bodyParser from "body-parser";
-import cors from "cors";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
@@ -24,19 +23,35 @@ pool.on("error", (err, client) => {
 
 const app = express();
 app.use(bodyParser.json());
-app.use(cors());
+
 app.use(cookieParser());
 app.use(
   session({
     secret: crypto.randomBytes(20).toString("hex"),
     saveUninitialized: true,
-    cookie: { maxAge: 86400000, domain: "http://localhost:4000" }, // 1 day
+    cookie: { maxAge: 86400000 }, // 1 day
     resave: false,
   })
 );
 
 app.listen(4000, () => {
   console.log("YO AM LISTENING!");
+});
+
+app.use((req, res, next) => {
+  
+  if (
+    req.url.includes("admin") &&
+    !req.url.includes("login") &&
+    !req.session.isAuth
+  ) {
+    return res.status(401).end();
+  } else next();
+  
+});
+
+app.post("/admin/blogs", (req, res) => {
+  return res.json({ status: 1, msg: "you have successfully auth uwu" });
 });
 
 app.post("/auth", async (req, res) => {
@@ -66,8 +81,7 @@ app.post("/auth", async (req, res) => {
       return res.json({ status: 0, msg: "error while signing up - " + e });
     }
   }
-
-  if (req.body.scope == "login") {
+  else if (req.body.scope == "login") {
     const client = await pool.connect();
 
     try {
@@ -88,19 +102,16 @@ app.post("/auth", async (req, res) => {
       let match = await bcrypt.compare(req.body.pass, hash);
       if (match) {
         req.session.isAuth = true;
+        req.session.user = req.body.user;
         return res.json({ status: 1, msg: "logged in! :D" });
       } else return res.json({ status: 0, msg: "wrong password D:" });
     } catch (e) {
       return res.json({ status: 0, msg: "error while signing up - " + e });
     }
+  } else if (req.body.scope == "logout") {
+    req.session.destroy();
+    return res.json({status: 1, msg: "logged out"});
   }
-});
-
-app.post("/api", (req, res) => {
-  console.log(req.session);
-  if (req.session) {
-    res.json({ status: 1, msg: "user logged in :)" });
-  } else res.redirect("/login");
 });
 
 process.on("beforeExit", (code) => {
